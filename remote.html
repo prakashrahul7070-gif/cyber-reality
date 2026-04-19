@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NEURAL REMOTE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --c:#00f5ff; --p:#bf00ff; --g:#00ff88; --r:#ff0055;
+  --bg:#000408; --gc:0 0 12px #00f5ff,0 0 30px #00f5ff44;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:none}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;font-family:'Share Tech Mono',monospace;color:var(--c);user-select:none}
+
+/* TOP STATUS */
+#top{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(0,245,255,.05);border-bottom:1px solid rgba(0,245,255,.12);z-index:10}
+#title{font-family:'Orbitron',monospace;font-size:11px;font-weight:900;letter-spacing:5px;text-shadow:var(--gc)}
+#status{font-size:9px;letter-spacing:2px;color:var(--r);transition:color .4s}
+#status.on{color:var(--g)}
+#latency{font-size:9px;letter-spacing:1px;opacity:.5}
+
+/* GYRO VISUALIZER */
+#gyro-ring-wrap{position:fixed;top:60px;left:50%;transform:translateX(-50%);width:180px;height:180px}
+#gyro-canvas{width:180px;height:180px}
+#gyro-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+#gyro-label div:first-child{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;opacity:.6}
+#gyro-label div:last-child{font-size:10px;letter-spacing:2px;margin-top:3px;color:var(--g)}
+
+/* TOUCH PAD */
+#touchpad{position:fixed;top:260px;left:50%;transform:translateX(-50%);width:260px;height:200px;border:1px solid rgba(0,245,255,.25);background:rgba(0,20,40,.4);border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#tp-label{font-size:9px;letter-spacing:3px;opacity:.3;pointer-events:none;position:absolute}
+#tp-dot{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--c);box-shadow:0 0 12px var(--c);transform:translate(-50%,-50%);transition:width .1s,height .1s;pointer-events:none;display:none}
+#tp-dot.big{width:28px;height:28px;background:var(--p);box-shadow:0 0 18px var(--p)}
+#tp-trail{position:absolute;inset:0;pointer-events:none}
+
+/* BOTTOM CONTROLS */
+#controls{position:fixed;bottom:0;left:0;right:0;padding:12px 16px 24px;display:grid;grid-template-columns:1fr 1fr;gap:10px;background:rgba(0,0,0,.3);border-top:1px solid rgba(0,245,255,.1)}
+
+.ctrl-btn{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;padding:12px 8px;background:rgba(0,245,255,.04);border:1px solid rgba(0,245,255,.2);color:var(--c);border-radius:2px;cursor:pointer;transition:all .2s;text-align:center;position:relative;overflow:hidden;-webkit-appearance:none}
+.ctrl-btn:active,.ctrl-btn.active{background:rgba(0,245,255,.15);border-color:var(--c);box-shadow:var(--gc)}
+.ctrl-btn.mode{border-color:rgba(191,0,255,.3);color:var(--p)}
+.ctrl-btn.mode:active,.ctrl-btn.mode.active{background:rgba(191,0,255,.15);border-color:var(--p);box-shadow:0 0 12px var(--p)}
+
+/* SHAKE indicator */
+#shake-flash{position:fixed;inset:0;pointer-events:none;background:rgba(0,245,255,.08);opacity:0;transition:opacity .1s;z-index:50}
+#shake-flash.show{opacity:1}
+
+/* MODE label */
+#current-mode{position:fixed;top:250px;left:50%;transform:translateX(-50%);font-family:'Orbitron',monospace;font-size:8px;letter-spacing:5px;color:var(--p);text-shadow:0 0 8px var(--p);opacity:.7}
+
+/* scanlines */
+#scan{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);opacity:.4;z-index:99}
+
+/* connection overlay */
+#connect-overlay{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+#co-title{font-family:'Orbitron',monospace;font-size:18px;font-weight:900;letter-spacing:6px;text-shadow:var(--gc)}
+#co-sub{font-size:10px;letter-spacing:3px;opacity:.5;text-align:center;max-width:280px;line-height:1.8}
+#room-input{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:3px;padding:12px 16px;background:rgba(0,245,255,.05);border:1px solid rgba(0,245,255,.3);color:var(--c);width:240px;text-align:center;outline:none}
+#room-input::placeholder{opacity:.4}
+#connect-btn{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:4px;padding:14px 28px;background:rgba(0,245,255,.1);border:1px solid var(--c);color:var(--c);cursor:pointer;box-shadow:var(--gc)}
+#connect-btn:active{background:rgba(0,245,255,.25)}
+#co-note{font-size:8px;letter-spacing:2px;opacity:.4;text-align:center;max-width:260px;line-height:1.8}
+
+/* gyro permission btn */
+#gyro-btn{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;padding:11px 20px;background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.3);color:var(--g);cursor:pointer;display:none}
+</style>
+</head>
+<body>
+
+<!-- CONNECT OVERLAY -->
+<div id="connect-overlay">
+  <div id="co-title">NEURAL REMOTE</div>
+  <div id="co-sub">Enter the room ID shown on the desktop display, or scan the QR code</div>
+  <input id="room-input" type="text" placeholder="ROOM ID (e.g. abc123)" autocomplete="off" spellcheck="false">
+  <button id="connect-btn" onclick="connectToRoom()">◈ CONNECT</button>
+  <button id="gyro-btn" onclick="requestGyro()">◈ ENABLE GYROSCOPE</button>
+  <div id="co-note">Both devices must be online.<br>Open index.html on desktop first.</div>
+</div>
+
+<!-- MAIN REMOTE UI (hidden until connected) -->
+<div id="top">
+  <div id="title">NEURAL REMOTE</div>
+  <div id="latency">--ms</div>
+  <div id="status">◉ OFFLINE</div>
+</div>
+
+<div id="gyro-ring-wrap">
+  <canvas id="gyro-canvas" width="180" height="180"></canvas>
+  <div id="gyro-label">
+    <div>GYROSCOPE</div>
+    <div id="gyro-val">0° / 0°</div>
+  </div>
+</div>
+
+<div id="current-mode">[ ENERGY MODE ]</div>
+
+<div id="touchpad">
+  <div id="tp-label">TOUCH PAD — PINCH TO SCALE</div>
+  <div id="tp-dot"></div>
+  <canvas id="tp-trail" width="260" height="200"></canvas>
+</div>
+
+<div id="controls">
+  <button class="ctrl-btn mode active" data-mode="energy" onclick="sendMode('energy')">◈ ENERGY</button>
+  <button class="ctrl-btn mode" data-mode="wireframe" onclick="sendMode('wireframe')">◈ WIREFRAME</button>
+  <button class="ctrl-btn mode" data-mode="data" onclick="sendMode('data')">◈ DATA</button>
+  <button class="ctrl-btn mode" data-mode="chaos" onclick="sendMode('chaos')">◈ CHAOS</button>
+</div>
+
+<div id="shake-flash"></div>
+<div id="scan"></div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+'use strict';
+
+// ── Pre-fill room ID from URL hash ──
+const hashRoom = location.hash.slice(1);
+if (hashRoom) document.getElementById('room-input').value = hashRoom;
+
+let peer, conn, connected = false;
+let currentMode = 'energy';
+
+// ═══════════════════════════════════════════
+//  CONNECTION
+// ═══════════════════════════════════════════
+function connectToRoom() {
+  const roomVal = document.getElementById('room-input').value.trim();
+  if (!roomVal) { alert('Enter room ID'); return; }
+  const peerId = 'cri-' + roomVal;
+
+  document.getElementById('connect-btn').textContent = '◈ CONNECTING...';
+
+  peer = new Peer({ debug: 0 });
+  peer.on('open', myId => {
+    conn = peer.connect(peerId, { reliable: false, serialization: 'json' });
+    conn.on('open', () => {
+      connected = true;
+      document.getElementById('connect-overlay').style.display = 'none';
+      document.getElementById('status').textContent = '◉ ONLINE';
+      document.getElementById('status').classList.add('on');
+      startPing();
+      checkGyroPermission();
+      startShakeDetect();
+    });
+    conn.on('error', e => alert('Connection failed: ' + e));
+    conn.on('close', () => {
+      connected = false;
+      document.getElementById('status').textContent = '◉ OFFLINE';
+      document.getElementById('status').classList.remove('on');
+    });
+  });
+  peer.on('error', e => {
+    document.getElementById('connect-btn').textContent = '◈ CONNECT';
+    alert('Peer error: ' + e.type + '\nMake sure desktop is open first.');
+  });
+}
+
+function send(data) {
+  if (connected && conn && conn.open) {
+    try { conn.send(data); } catch(e) {}
+  }
+}
+
+// ── FALLBACK: same-device BroadcastChannel ──
+function connectSameDevice() {
+  const bc = new BroadcastChannel('cyber_reality_remote');
+  connected = true;
+  document.getElementById('connect-overlay').style.display = 'none';
+  document.getElementById('status').textContent = '◉ LOCAL';
+  document.getElementById('status').classList.add('on');
+  window._sendFn = data => bc.postMessage(data);
+  checkGyroPermission();
+}
+
+// override send if fallback
+window._sendFn = null;
+function send(data) {
+  if (window._sendFn) { window._sendFn(data); return; }
+  if (connected && conn && conn.open) { try { conn.send(data); } catch(e) {} }
+}
+
+// ── PING ──
+function startPing() {
+  setInterval(() => {
+    send({ type:'ping', t: Date.now() });
+  }, 2000);
+  if (conn) {
+    conn.on('data', d => {
+      if (d && d.type === 'pong') {
+        const lat = Date.now() - d.t;
+        document.getElementById('latency').textContent = lat + 'ms';
+      }
+    });
+  }
+}
+
+// ═══════════════════════════════════════════
+//  GYROSCOPE
+// ═══════════════════════════════════════════
+let gyroEnabled = false;
+let smoothX = 0, smoothY = 0, smoothZ = 0;
+let baseAlpha = null, baseBeta = null, baseGamma = null;
+
+function checkGyroPermission() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+
+    document.getElementById('gyro-btn').style.display = 'block';
+  } else {
+    enableGyro();
+  }
+}
+
+function requestGyro() {
+  DeviceOrientationEvent.requestPermission().then(r => {
+    if (r === 'granted') { enableGyro(); document.getElementById('gyro-btn').style.display='none'; }
+    else alert('Gyroscope permission denied');
+  }).catch(e => { enableGyro(); });
+}
+
+function enableGyro() {
+  window.addEventListener('deviceorientation', onGyro, true);
+  gyroEnabled = true;
+}
+
+function onGyro(e) {
+  if (!e.beta && !e.gamma) return;
+
+  // set baseline on first reading
+  if (baseAlpha === null) { baseAlpha = e.alpha||0; baseBeta = e.beta||0; baseGamma = e.gamma||0; }
+
+  const ax = (e.beta||0) - baseBeta;
+  const ay = (e.gamma||0) - baseGamma;
+  const az = (e.alpha||0) - baseAlpha;
+
+  // smooth
+  smoothX += (ax - smoothX) * 0.3;
+  smoothY += (ay - smoothY) * 0.3;
+  smoothZ += (az - smoothZ) * 0.2;
+
+  // send to desktop (delta values, clamped)
+  const dx = Math.max(-15, Math.min(15, smoothX - (window._prevSX||0)));
+  const dy = Math.max(-15, Math.min(15, smoothY - (window._prevSY||0)));
+  window._prevSX = smoothX; window._prevSY = smoothY;
+
+  send({ type:'gyro', x: dy*0.06, y: dx*0.06, ax: smoothX.toFixed(1)*1, ay: smoothY.toFixed(1)*1, az: smoothZ.toFixed(1)*1 });
+
+  document.getElementById('gyro-val').textContent = smoothX.toFixed(0)+'° / '+smoothY.toFixed(0)+'°';
+  drawGyroRing(smoothX, smoothY);
+}
+
+// ── GYRO RING VISUALIZER ──
+const gCanvas = document.getElementById('gyro-canvas');
+const gCtx = gCanvas.getContext('2d');
+function drawGyroRing(bx, by) {
+  const W=180,H=180,cx=90,cy=90;
+  gCtx.clearRect(0,0,W,H);
+
+  // outer ring
+  gCtx.strokeStyle='rgba(0,245,255,0.15)';
+  gCtx.lineWidth=1;
+  gCtx.beginPath(); gCtx.arc(cx,cy,80,0,Math.PI*2); gCtx.stroke();
+  gCtx.beginPath(); gCtx.arc(cx,cy,60,0,Math.PI*2); gCtx.stroke();
+
+  // tilt indicator dot
+  const nx = Math.max(-1,Math.min(1,by/45));
+  const ny = Math.max(-1,Math.min(1,bx/45));
+  const dx = cx + nx*70, dy2 = cy + ny*70;
+
+  // glow line from center
+  const grad = gCtx.createLinearGradient(cx,cy,dx,dy2);
+  grad.addColorStop(0,'rgba(0,245,255,0)');
+  grad.addColorStop(1,'rgba(0,245,255,0.8)');
+  gCtx.strokeStyle=grad; gCtx.lineWidth=2;
+  gCtx.beginPath(); gCtx.moveTo(cx,cy); gCtx.lineTo(dx,dy2); gCtx.stroke();
+
+  // dot
+  const dotGrad=gCtx.createRadialGradient(dx,dy2,0,dx,dy2,14);
+  dotGrad.addColorStop(0,'rgba(0,245,255,0.9)');
+  dotGrad.addColorStop(1,'rgba(0,245,255,0)');
+  gCtx.fillStyle=dotGrad;
+  gCtx.beginPath(); gCtx.arc(dx,dy2,14,0,Math.PI*2); gCtx.fill();
+
+  // center dot
+  gCtx.fillStyle='rgba(0,245,255,0.5)';
+  gCtx.beginPath(); gCtx.arc(cx,cy,4,0,Math.PI*2); gCtx.fill();
+
+  // crosshair
+  gCtx.strokeStyle='rgba(0,245,255,0.12)';
+  gCtx.lineWidth=1;
+  gCtx.beginPath(); gCtx.moveTo(cx-80,cy); gCtx.lineTo(cx+80,cy); gCtx.stroke();
+  gCtx.beginPath(); gCtx.moveTo(cx,cy-80); gCtx.lineTo(cx,cy+80); gCtx.stroke();
+}
+// init gyro ring
+drawGyroRing(0,0);
+
+// ═══════════════════════════════════════════
+//  TOUCHPAD
+// ═══════════════════════════════════════════
+const tp = document.getElementById('touchpad');
+const tpDot = document.getElementById('tp-dot');
+const tpTrail = document.getElementById('tp-trail');
+const tctx = tpTrail.getContext('2d');
+const trailPts = [];
+let prevTouchX=null, prevTouchY=null;
+let touchStartX=null, touchStartY=null, touchStartTime=0;
+let pinching=false, prevPinchDist=null;
+
+tp.addEventListener('touchstart', e => {
+  e.preventDefault();
+  tpDot.style.display='block';
+  const t=e.touches[0];
+  const r=tp.getBoundingClientRect();
+  touchStartX=t.clientX-r.left; touchStartY=t.clientY-r.top; touchStartTime=Date.now();
+  prevTouchX=touchStartX; prevTouchY=touchStartY;
+
+  if(e.touches.length>=2){
+    pinching=true;
+    const t2=e.touches[1];
+    prevPinchDist=Math.hypot(t2.clientX-t.clientX,t2.clientY-t.clientY);
+    tpDot.classList.add('big');
+  }
+},{ passive:false });
+
+tp.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const r=tp.getBoundingClientRect();
+
+  if(e.touches.length>=2 && pinching){
+    const t1=e.touches[0],t2=e.touches[1];
+    const d=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    const delta=(d-(prevPinchDist||d));
+    prevPinchDist=d;
+    send({type:'touch',pinching:true,touching:true,scaleDelta:delta});
+
+    // dot between fingers
+    const mx=((t1.clientX+t2.clientX)/2)-r.left;
+    const my=((t1.clientY+t2.clientY)/2)-r.top;
+    tpDot.style.left=mx+'px'; tpDot.style.top=my+'px';
+    return;
+  }
+
+  const t=e.touches[0];
+  const x=t.clientX-r.left, y=t.clientY-r.top;
+  tpDot.style.left=x+'px'; tpDot.style.top=y+'px';
+
+  // trail
+  trailPts.push({x,y});
+  if(trailPts.length>20) trailPts.shift();
+  drawTrail();
+
+  send({type:'touch',pinching:false,touching:true,scaleDelta:0});
+  prevTouchX=x; prevTouchY=y;
+},{ passive:false });
+
+tp.addEventListener('touchend', e => {
+  e.preventDefault();
+  tpDot.style.display='none';
+  tpDot.classList.remove('big');
+  pinching=false; prevPinchDist=null;
+
+  // swipe detect
+  if(touchStartX!==null && Date.now()-touchStartTime<400){
+    const dx=prevTouchX-touchStartX;
+    const dy=prevTouchY-touchStartY;
+    if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)){
+      send({type:'touch',pinching:false,touching:false,scaleDelta:0,swipe:dx>0?'right':'left'});
+    }
+  }
+  send({type:'touch',pinching:false,touching:false,scaleDelta:0});
+  touchStartX=null;
+  setTimeout(()=>{trailPts.length=0;tctx.clearRect(0,0,260,200);},400);
+},{ passive:false });
+
+function drawTrail(){
+  tctx.clearRect(0,0,260,200);
+  if(trailPts.length<2) return;
+  tctx.lineCap='round';
+  trailPts.forEach((pt,i)=>{
+    if(i===0) return;
+    const alpha=(i/trailPts.length)*0.7;
+    const width=2*(i/trailPts.length);
+    tctx.strokeStyle=`rgba(0,245,255,${alpha})`;
+    tctx.lineWidth=width;
+    tctx.beginPath();
+    tctx.moveTo(trailPts[i-1].x,trailPts[i-1].y);
+    tctx.lineTo(pt.x,pt.y);
+    tctx.stroke();
+  });
+}
+
+// ═══════════════════════════════════════════
+//  SHAKE DETECTION
+// ═══════════════════════════════════════════
+function startShakeDetect() {
+  let lastAcc={x:0,y:0,z:0}, shakeCount=0, lastShake=0;
+  window.addEventListener('devicemotion', e => {
+    const a=e.accelerationIncludingGravity;
+    if(!a) return;
+    const dx=Math.abs(a.x-(lastAcc.x||0));
+    const dy=Math.abs(a.y-(lastAcc.y||0));
+    const dz=Math.abs(a.z-(lastAcc.z||0));
+    lastAcc={x:a.x,y:a.y,z:a.z};
+    if(dx+dy+dz>30 && Date.now()-lastShake>800){
+      lastShake=Date.now();
+      send({type:'shake'});
+      const sf=document.getElementById('shake-flash');
+      sf.classList.add('show');
+      setTimeout(()=>sf.classList.remove('show'),200);
+    }
+  });
+}
+
+// ── MODE BUTTONS ──
+function sendMode(m){
+  currentMode=m;
+  send({type:'mode',mode:m});
+  document.getElementById('current-mode').textContent='[ '+m.toUpperCase()+' MODE ]';
+  document.querySelectorAll('.ctrl-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.mode===m);
+  });
+}
+
+// ── RESET GYRO BASELINE (double tap anywhere) ──
+let lastTap=0;
+document.addEventListener('touchend', e=>{
+  if(e.target.closest('#controls') || e.target.closest('#touchpad')) return;
+  const now=Date.now();
+  if(now-lastTap<300){
+    baseAlpha=null; baseBeta=null; baseGamma=null;
+    smoothX=0; smoothY=0;
+    drawGyroRing(0,0);
+  }
+  lastTap=now;
+});
+</script>
+</body>
+</html>
