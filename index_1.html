@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEURAL OS — HOLOGRAPHIC DISPLAY</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root {
+  --cyan:#00f5ff; --purple:#bf00ff; --blue:#0050ff;
+  --green:#00ff88; --red:#ff0055; --bg:#000408;
+  --glow-cyan:0 0 10px #00f5ff,0 0 30px #00f5ff55,0 0 60px #00f5ff22;
+  --glow-purple:0 0 10px #bf00ff,0 0 30px #bf00ff55;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;font-family:'Share Tech Mono',monospace;color:var(--cyan);cursor:crosshair}
+
+#three-canvas{display:block;width:100%;height:100%;position:fixed;inset:0;z-index:1}
+
+/* HUD */
+#hud{position:fixed;inset:0;z-index:20;pointer-events:none}
+.corner{position:absolute;width:48px;height:48px;border-color:var(--cyan);border-style:solid;opacity:.5}
+.corner.tl{top:14px;left:14px;border-width:2px 0 0 2px}
+.corner.tr{top:14px;right:14px;border-width:2px 2px 0 0}
+.corner.bl{bottom:14px;left:14px;border-width:0 0 2px 2px}
+.corner.br{bottom:14px;right:14px;border-width:0 2px 2px 0}
+
+#top-bar{position:absolute;top:0;left:0;right:0;height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 66px;background:linear-gradient(180deg,rgba(0,245,255,.07) 0%,transparent 100%);border-bottom:1px solid rgba(0,245,255,.12)}
+#sys-name{font-family:'Orbitron',monospace;font-size:12px;font-weight:900;letter-spacing:6px;color:var(--cyan);text-shadow:var(--glow-cyan);animation:flicker 9s infinite}
+#sys-time{font-size:10px;letter-spacing:3px;opacity:.6}
+#conn-status{font-size:10px;letter-spacing:2px;color:var(--red);text-shadow:0 0 8px var(--red);transition:color .4s,text-shadow .4s}
+#conn-status.connected{color:var(--green);text-shadow:0 0 8px var(--green)}
+
+#bottom-bar{position:absolute;bottom:0;left:0;right:0;height:34px;display:flex;align-items:center;padding:0 66px;gap:28px;background:linear-gradient(0deg,rgba(0,245,255,.04) 0%,transparent 100%);border-top:1px solid rgba(0,245,255,.08)}
+.stat{font-size:9px;letter-spacing:2px;opacity:.55}.stat span{color:var(--cyan);opacity:1}
+
+#mode-display{position:absolute;top:58px;left:50%;transform:translateX(-50%);font-family:'Orbitron',monospace;font-size:9px;letter-spacing:7px;color:var(--purple);text-shadow:var(--glow-purple);opacity:.8;transition:all .5s}
+
+/* info panel */
+#info-panel{position:absolute;top:80px;left:28px;width:220px;background:rgba(0,20,40,.55);border:1px solid rgba(0,245,255,.22);backdrop-filter:blur(10px);padding:14px 16px}
+#info-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+.p-title{font-family:'Orbitron',monospace;font-size:8px;letter-spacing:4px;color:var(--cyan);opacity:.8;margin-bottom:10px}
+.p-row{font-size:9px;letter-spacing:1px;margin:5px 0;display:flex;justify-content:space-between;gap:16px;opacity:.65}
+.p-row span:last-child{color:var(--green)}
+
+/* QR panel */
+#qr-panel{position:absolute;top:80px;right:28px;width:200px;background:rgba(0,20,40,.6);border:1px solid rgba(0,245,255,.22);backdrop-filter:blur(10px);padding:16px;text-align:center}
+#qr-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+#qr-title{font-family:'Orbitron',monospace;font-size:8px;letter-spacing:3px;margin-bottom:10px;opacity:.7}
+#qr-img{width:140px;height:140px;margin:0 auto;border:1px solid rgba(0,245,255,.3);background:#000}
+#qr-url{font-size:8px;letter-spacing:1px;margin-top:8px;opacity:.5;word-break:break-all;line-height:1.4}
+#qr-note{font-size:8px;letter-spacing:1px;margin-top:6px;color:var(--green);opacity:.7}
+
+/* gesture feedback */
+#gesture-flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Orbitron',monospace;font-size:26px;font-weight:900;letter-spacing:6px;color:var(--cyan);text-shadow:var(--glow-cyan);opacity:0;transition:opacity .2s;pointer-events:none;text-align:center}
+#gesture-flash.show{opacity:1}
+#gesture-sub{font-size:10px;letter-spacing:4px;color:rgba(0,245,255,.6);margin-top:6px}
+
+/* AI messages */
+#ai-log{position:absolute;bottom:44px;left:28px;width:260px}
+.ai-msg{font-size:9px;letter-spacing:1px;color:rgba(0,245,255,.75);padding:5px 10px;border-left:2px solid var(--cyan);margin-bottom:5px;background:rgba(0,30,50,.4);animation:msgIn .4s ease forwards,msgOut 3s 2.5s ease forwards;opacity:0}
+@keyframes msgIn{from{transform:translateX(-16px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes msgOut{to{opacity:0;transform:translateY(-6px)}}
+
+/* remote data visualizer */
+#remote-viz{position:absolute;bottom:44px;right:28px;width:200px;height:100px;background:rgba(0,20,40,.5);border:1px solid rgba(0,245,255,.18);overflow:hidden}
+#remote-viz canvas{width:100%;height:100%}
+#rviz-label{position:absolute;top:4px;left:6px;font-size:8px;letter-spacing:2px;opacity:.5}
+
+#scanlines{position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);opacity:.4}
+#vignette{position:fixed;inset:0;z-index:99;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,4,8,.85) 100%)}
+
+@keyframes flicker{0%,94%,100%{opacity:1}95%{opacity:.5}97%{opacity:1}98%{opacity:.3}99%{opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="three-canvas"></canvas>
+
+<div id="hud">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <div id="top-bar">
+    <div id="sys-name">NEURAL OS v4.7</div>
+    <div id="sys-time">--:--:--</div>
+    <div id="conn-status">◉ REMOTE: OFFLINE</div>
+  </div>
+
+  <div id="mode-display">[ ENERGY MODE ]</div>
+
+  <div id="info-panel">
+    <div class="p-title">◈ REMOTE TELEMETRY</div>
+    <div class="p-row"><span>TILT X</span><span id="t-tiltx">--°</span></div>
+    <div class="p-row"><span>TILT Y</span><span id="t-tilty">--°</span></div>
+    <div class="p-row"><span>TILT Z</span><span id="t-tiltz">--°</span></div>
+    <div class="p-row"><span>TOUCH</span><span id="t-touch">NONE</span></div>
+    <div class="p-row"><span>PINCH</span><span id="t-pinch">--</span></div>
+    <div class="p-row"><span>MODE</span><span id="t-mode">ENERGY</span></div>
+    <div class="p-row"><span>LATENCY</span><span id="t-latency">--ms</span></div>
+  </div>
+
+  <div id="qr-panel">
+    <div id="qr-title">◈ SCAN TO CONTROL</div>
+    <canvas id="qr-img"></canvas>
+    <div id="qr-url">Loading remote URL...</div>
+    <div id="qr-note">↑ Open on your phone</div>
+  </div>
+
+  <div id="gesture-flash">
+    <div id="gf-name">TILT DETECTED</div>
+    <div id="gesture-sub">ROTATING CORE</div>
+  </div>
+
+  <div id="ai-log"></div>
+
+  <div id="remote-viz">
+    <canvas id="rviz-canvas" width="200" height="100"></canvas>
+    <div id="rviz-label">GYRO FEED</div>
+  </div>
+
+  <div id="bottom-bar">
+    <div class="stat">FPS <span id="b-fps">60</span></div>
+    <div class="stat">PARTICLES <span id="b-pts">1200</span></div>
+    <div class="stat">ORBIT <span id="b-orbit">1.0×</span></div>
+    <div class="stat">INTENSITY <span id="b-int">NOMINAL</span></div>
+  </div>
+</div>
+
+<div id="scanlines"></div>
+<div id="vignette"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- QR code generator -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+const CHANNEL = 'cyberreality_' + Math.random().toString(36).slice(2,8);
+// We'll broadcast channel ID via URL hash so phone can join the same room
+// Using BroadcastChannel for same-device, PeerJS for cross-device
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+const S = {
+  mode:'energy', intensity:1, orbitSpeed:1,
+  rotX:0, rotY:0, rotZ:0,
+  scale:1, pinching:false,
+  connected:false, latency:0,
+  lastPing:0, fps:60, fc:0, ft:performance.now(),
+};
+
+// ═══════════════════════════════════════════
+//  PEER CONNECTION (PeerJS free broker)
+// ═══════════════════════════════════════════
+let peer, conn;
+const existingHash = location.hash.slice(1);
+const shortId = existingHash || Math.random().toString(36).slice(2,7);
+const roomId = 'cri-' + shortId;
+
+// update hash so remote URL carries the room ID
+location.hash = shortId;
+
+function initPeer() {
+  // Load PeerJS
+  const s = document.createElement('script');
+  s.src = 'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js';
+  s.onload = () => {
+    peer = new Peer(roomId, { debug: 0 });
+    peer.on('open', id => {
+      log('◈ DISPLAY READY — ID: ' + id);
+      buildQR();
+    });
+    peer.on('connection', c => {
+      conn = c;
+      conn.on('open', () => {
+        S.connected = true;
+        document.getElementById('conn-status').textContent = '◉ REMOTE: ONLINE';
+        document.getElementById('conn-status').classList.add('connected');
+        log('◈ PHONE REMOTE CONNECTED');
+      });
+      conn.on('data', handleRemoteData);
+      conn.on('close', () => {
+        S.connected = false;
+        document.getElementById('conn-status').textContent = '◉ REMOTE: OFFLINE';
+        document.getElementById('conn-status').classList.remove('connected');
+        log('◈ REMOTE DISCONNECTED');
+      });
+    });
+    peer.on('error', e => {
+      log('⚠ PEER ERROR: ' + e.type);
+      fallbackBroadcast();
+    });
+  };
+  s.onerror = () => { log('⚠ P2P UNAVAILABLE — TRY SAME DEVICE'); fallbackBroadcast(); };
+  document.head.appendChild(s);
+}
+
+function fallbackBroadcast() {
+  // BroadcastChannel for same-device testing
+  try {
+    const bc = new BroadcastChannel('cyber_reality_remote');
+    bc.onmessage = e => handleRemoteData(e.data);
+    S.connected = true;
+    document.getElementById('conn-status').textContent = '◉ REMOTE: SAME-TAB';
+    document.getElementById('conn-status').classList.add('connected');
+    log('◈ SAME-DEVICE MODE ACTIVE');
+  } catch(e) {}
+}
+
+function handleRemoteData(data) {
+  if (!data) return;
+  if (data.type === 'gyro') {
+    S.rotX += data.x * 0.4;
+    S.rotY += data.y * 0.4;
+    updateTelemetry(data);
+    plotGyro(data.x, data.y);
+  }
+  if (data.type === 'touch') {
+    S.pinching = data.pinching;
+    if (data.swipe) handleSwipe(data.swipe);
+    if (data.pinching) {
+      S.scale = Math.max(0.4, Math.min(3, S.scale + data.scaleDelta * 0.02));
+    }
+    document.getElementById('t-touch').textContent = data.touching ? 'ACTIVE' : 'NONE';
+    document.getElementById('t-pinch').textContent = data.pinching ? 'ACTIVE' : '--';
+    if (data.pinching) showGesture('PINCH SCALE','ZOOM ACTIVE');
+  }
+  if (data.type === 'mode') {
+    S.mode = data.mode;
+    applyMode(S.mode);
+  }
+  if (data.type === 'ping') {
+    S.latency = Date.now() - data.t;
+    document.getElementById('t-latency').textContent = S.latency + 'ms';
+    if (conn) conn.send({ type:'pong', t: data.t });
+  }
+  if (data.type === 'shake') {
+    S.intensity = 2.5;
+    showGesture('SHAKE DETECTED','CHAOS SURGE');
+    setTimeout(() => S.intensity = 1, 800);
+  }
+}
+
+function updateTelemetry(d) {
+  document.getElementById('t-tiltx').textContent = d.ax ? d.ax.toFixed(1)+'°' : '--';
+  document.getElementById('t-tilty').textContent = d.ay ? d.ay.toFixed(1)+'°' : '--';
+  document.getElementById('t-tiltz').textContent = d.az ? d.az.toFixed(1)+'°' : '--';
+}
+
+function handleSwipe(dir) {
+  const modes = ['energy','wireframe','data','chaos'];
+  const i = modes.indexOf(S.mode);
+  if (dir === 'left') S.mode = modes[(i+1)%modes.length];
+  else S.mode = modes[(i-1+modes.length)%modes.length];
+  applyMode(S.mode);
+  showGesture('SWIPE '+dir.toUpperCase(), 'MODE: '+S.mode.toUpperCase());
+}
+
+// ═══════════════════════════════════════════
+//  QR CODE
+// ═══════════════════════════════════════════
+function buildQR() {
+  // Build remote URL: same origin + path, swap filename to remote.html, add room hash
+  const base = location.href.split('#')[0];                          // strip any hash
+  const dir  = base.substring(0, base.lastIndexOf('/') + 1);        // directory part
+  const remoteUrl = dir + 'remote.html#' + shortId;
+  document.getElementById('qr-url').textContent = remoteUrl;
+  try {
+    new QRCode(document.getElementById('qr-img'), {
+      text: remoteUrl, width:140, height:140,
+      colorDark:'#00f5ff', colorLight:'#000408',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch(e) {
+    // fallback: just show URL
+    const c = document.getElementById('qr-img');
+    const ctx = c.getContext('2d');
+    ctx.fillStyle='#001428';ctx.fillRect(0,0,140,140);
+    ctx.fillStyle='#00f5ff';ctx.font='9px monospace';
+    ctx.fillText('Open remote.html',8,70);
+    ctx.fillText('#'+roomId.replace('cri-',''),8,85);
+  }
+}
+
+// ═══════════════════════════════════════════
+//  GYRO VISUALIZER (mini canvas)
+// ═══════════════════════════════════════════
+const rviz = document.getElementById('rviz-canvas');
+const rctx = rviz.getContext('2d');
+const gyroHistory = [];
+function plotGyro(x, y) {
+  gyroHistory.push({x,y});
+  if (gyroHistory.length > 60) gyroHistory.shift();
+  rctx.clearRect(0,0,200,100);
+  rctx.strokeStyle = 'rgba(0,245,255,0.6)';
+  rctx.lineWidth = 1.5;
+  rctx.beginPath();
+  gyroHistory.forEach((p,i) => {
+    const px = i*(200/60), py = 50 + p.x * 4;
+    i===0 ? rctx.moveTo(px,py) : rctx.lineTo(px,py);
+  });
+  rctx.stroke();
+  rctx.strokeStyle='rgba(191,0,255,0.5)';
+  rctx.beginPath();
+  gyroHistory.forEach((p,i)=>{
+    const px=i*(200/60),py=50+p.y*4;
+    i===0?rctx.moveTo(px,py):rctx.lineTo(px,py);
+  });
+  rctx.stroke();
+}
+
+// ═══════════════════════════════════════════
+//  THREE.JS SCENE
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0x000408,1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+camera.position.z = 9;
+
+// lights
+const aLight = new THREE.AmbientLight(0x000820,0.5); scene.add(aLight);
+const cLight = new THREE.PointLight(0x00f5ff,3,25); cLight.position.set(3,3,3); scene.add(cLight);
+const pLight = new THREE.PointLight(0xbf00ff,2.5,20); pLight.position.set(-3,-2,2); scene.add(pLight);
+const bLight = new THREE.PointLight(0x0050ff,2,20); bLight.position.set(0,-4,-3); scene.add(bLight);
+
+// core group
+const coreGroup = new THREE.Group(); scene.add(coreGroup);
+
+// energy core
+const coreGeo = new THREE.IcosahedronGeometry(1.1,1);
+const coreMat = new THREE.MeshPhongMaterial({color:0x00f5ff,emissive:0x003050,wireframe:false,transparent:true,opacity:.85,shininess:120});
+const coreMesh = new THREE.Mesh(coreGeo,coreMat); coreGroup.add(coreMesh);
+
+const innerGeo = new THREE.SphereGeometry(0.6,32,32);
+const innerMat = new THREE.MeshPhongMaterial({color:0x00a8ff,emissive:0x002244,transparent:true,opacity:.5,shininess:200});
+const innerMesh = new THREE.Mesh(innerGeo,innerMat); coreGroup.add(innerMesh);
+
+const wireGeo = new THREE.IcosahedronGeometry(1.15,1);
+const wireMat = new THREE.MeshBasicMaterial({color:0x00f5ff,wireframe:true,transparent:true,opacity:.2});
+const wireMesh = new THREE.Mesh(wireGeo,wireMat); coreGroup.add(wireMesh);
+
+// rings
+const rings=[];
+[{r:2.2,tube:.015,color:0x00f5ff,tx:Math.PI/2,tz:0,spd:.4},
+ {r:2.8,tube:.012,color:0xbf00ff,tx:Math.PI/4,tz:Math.PI/6,spd:-.25},
+ {r:3.4,tube:.01, color:0x0050ff,tx:Math.PI/3,tz:Math.PI/4,spd:.18},
+ {r:1.7,tube:.02, color:0x00ff88,tx:.3,tz:Math.PI/5,spd:-.55}
+].forEach(rd=>{
+  const g=new THREE.TorusGeometry(rd.r,rd.tube,8,120);
+  const m=new THREE.MeshBasicMaterial({color:rd.color,transparent:true,opacity:.7});
+  const mesh=new THREE.Mesh(g,m);
+  mesh.rotation.x=rd.tx; mesh.rotation.z=rd.tz;
+  const grp=new THREE.Group(); grp.add(mesh); coreGroup.add(grp);
+  rings.push({group:grp,speed:rd.spd});
+});
+
+// nodes
+const nodes=[];
+for(let i=0;i<12;i++){
+  const angle=(i/12)*Math.PI*2;
+  const r=2+Math.random()*1.2;
+  const geo=new THREE.OctahedronGeometry(.07+Math.random()*.06,0);
+  const mat=new THREE.MeshPhongMaterial({color:[0x00f5ff,0xbf00ff,0x0050ff,0x00ff88][i%4],emissive:[0x004050,0x200040,0x001030,0x003020][i%4],shininess:100});
+  const mesh=new THREE.Mesh(geo,mat);
+  nodes.push({mesh,angle,radius:r,speed:(.3+Math.random()*.4)*(Math.random()>.5?1:-1),tilt:Math.random()*Math.PI});
+  coreGroup.add(mesh);
+}
+
+// particles
+let pSys=null;
+function buildParticles(n){
+  if(pSys){scene.remove(pSys);pSys.geometry.dispose();}
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(n*3);
+  const vel=new Float32Array(n*3);
+  const ph=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const r=1.5+Math.random()*2.5,th=Math.random()*Math.PI*2,phi=Math.random()*Math.PI;
+    pos[i*3]=r*Math.sin(phi)*Math.cos(th);
+    pos[i*3+1]=r*Math.sin(phi)*Math.sin(th);
+    pos[i*3+2]=r*Math.cos(phi);
+    vel[i*3]=(Math.random()-.5)*.02;
+    vel[i*3+1]=(Math.random()-.5)*.02;
+    vel[i*3+2]=(Math.random()-.5)*.02;
+    ph[i]=Math.random()*Math.PI*2;
+  }
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo._vel=vel; geo._ph=ph;
+  const mat=new THREE.PointsMaterial({color:0x00f5ff,size:.04,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false});
+  pSys=new THREE.Points(geo,mat); scene.add(pSys);
+  document.getElementById('b-pts').textContent=n;
+}
+buildParticles(1200);
+
+// stars
+const sgeo=new THREE.BufferGeometry();
+const sp=new Float32Array(3000*3);
+for(let i=0;i<3000*3;i++) sp[i]=(Math.random()-.5)*400;
+sgeo.setAttribute('position',new THREE.BufferAttribute(sp,3));
+scene.add(new THREE.Points(sgeo,new THREE.PointsMaterial({color:0xffffff,size:.15,transparent:true,opacity:.4})));
+
+// grid
+const grid=new THREE.GridHelper(30,30,0x001428,0x001428);
+grid.position.y=-5; grid.material.transparent=true; grid.material.opacity=.25;
+scene.add(grid);
+
+// data streams
+const dStreams=[];
+function buildStreams(){
+  dStreams.forEach(s=>{scene.remove(s.line);s.line.geometry.dispose();});
+  dStreams.length=0;
+  for(let i=0;i<20;i++){
+    const x=(Math.random()-.5)*10,z=(Math.random()-.5)*10;
+    const pts=[]; for(let j=0;j<20;j++) pts.push(new THREE.Vector3(x,-5+j*.5,z));
+    const g=new THREE.BufferGeometry().setFromPoints(pts);
+    const m=new THREE.LineBasicMaterial({color:0x00f5ff,transparent:true,opacity:Math.random()*.3+.1,blending:THREE.AdditiveBlending});
+    const line=new THREE.Line(g,m); line.visible=false; scene.add(line);
+    dStreams.push({line,speed:Math.random()*.05+.01,offset:Math.random()*10});
+  }
+}
+buildStreams();
+
+// holo cards
+const cards=[];
+[{p:[-4,1.5,-1],r:[0,.4,.05]},{p:[4,.5,-1],r:[0,-.4,-.05]},{p:[0,3.5,-2],r:[.2,0,0]}].forEach(cd=>{
+  const g=new THREE.Group(); g.position.set(...cd.p); g.rotation.set(...cd.r);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2,1.2),new THREE.MeshBasicMaterial({color:0x001428,transparent:true,opacity:.6,side:THREE.DoubleSide}));
+  const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(2,1.2)),new THREE.LineBasicMaterial({color:0x00f5ff,transparent:true,opacity:.5}));
+  g.add(m); g.add(e); scene.add(g);
+  cards.push({group:g,base:[...cd.p],baseR:[...cd.r]});
+});
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ── MODE APPLY ──
+const modeColors={
+  energy:{core:0x00f5ff,inner:0x00a8ff,p:0x00f5ff,l1:0x00f5ff,l2:0xbf00ff},
+  wireframe:{core:0x00ff88,inner:0x00ff88,p:0x00ff88,l1:0x00ff88,l2:0x00a8ff},
+  data:{core:0x0050ff,inner:0x0050ff,p:0x0050ff,l1:0x0050ff,l2:0x00f5ff},
+  chaos:{core:0xff0055,inner:0xff6600,p:0xff0055,l1:0xff0055,l2:0xffaa00},
+};
+function applyMode(m){
+  const c=modeColors[m]||modeColors.energy;
+  coreMat.color.setHex(c.core); innerMat.color.setHex(c.inner);
+  pSys.material.color.setHex(c.p);
+  coreMat.wireframe=m==='wireframe'; innerMesh.visible=m!=='wireframe';
+  dStreams.forEach(s=>s.line.visible=m==='data');
+  cLight.color.setHex(c.l1); pLight.color.setHex(c.l2);
+  if(m==='chaos') buildParticles(1800); else buildParticles(1200);
+  document.getElementById('mode-display').textContent='[ '+m.toUpperCase()+' MODE ]';
+  document.getElementById('t-mode').textContent=m.toUpperCase();
+  S.mode=m;
+}
+
+// ── MAIN LOOP ──
+let time=0, last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min((now-last)/1000,.05); last=now; time+=dt;
+  S.fc++; if(now-S.ft>1000){S.fps=Math.round(S.fc*1000/(now-S.ft));S.fc=0;S.ft=now;}
+  document.getElementById('b-fps').textContent=S.fps;
+
+  const INT=S.intensity, OSP=S.orbitSpeed;
+
+  // apply phone tilt to core rotation
+  coreGroup.rotation.y += S.rotX * 0.08;
+  coreGroup.rotation.x += S.rotY * 0.08;
+  S.rotX *= 0.75; S.rotY *= 0.75;
+
+  // apply scale from pinch
+  const ts=coreGroup.scale.x+(S.scale-coreGroup.scale.x)*0.08;
+  coreGroup.scale.setScalar(ts);
+
+  // core animation
+  const breathe=1+Math.sin(time*1.5)*.04*INT;
+  coreMesh.scale.setScalar(breathe); wireMesh.scale.setScalar(breathe*1.02);
+  coreMesh.rotation.x+=.004*INT; coreMesh.rotation.y+=.007*INT;
+  wireMesh.rotation.x-=.003*INT; wireMesh.rotation.z+=.005*INT;
+  innerMesh.rotation.y+=.01*INT; innerMesh.rotation.z+=.008*INT;
+  innerMesh.scale.setScalar(1+Math.sin(time*3)*.08);
+
+  rings.forEach(r=>r.group.rotation.y+=r.speed*OSP*.01);
+  nodes.forEach(n=>{
+    n.angle+=n.speed*OSP*.008;
+    n.mesh.position.x=Math.cos(n.angle)*n.radius;
+    n.mesh.position.y=Math.sin(n.angle*.7+n.tilt)*n.radius*.5;
+    n.mesh.position.z=Math.sin(n.angle)*n.radius*.7;
+    n.mesh.rotation.x+=.02; n.mesh.rotation.y+=.03;
+  });
+
+  if(pSys){
+    const pos=pSys.geometry.attributes.position.array;
+    const vel=pSys.geometry._vel; const ph=pSys.geometry._ph;
+    const pc=pos.length/3;
+    for(let i=0;i<pc;i++){
+      const px=pos[i*3],py=pos[i*3+1],pz=pos[i*3+2];
+      const of=.003*OSP*INT;
+      pos[i*3]=px+(-pz*of+vel[i*3]);
+      pos[i*3+1]=py+Math.sin(time+ph[i])*.002*INT;
+      pos[i*3+2]=pz+(px*of+vel[i*3+2]);
+      const nr=Math.sqrt(pos[i*3]**2+pos[i*3+1]**2+pos[i*3+2]**2);
+      if(nr>4.5||nr<.8){pos[i*3]*=.96;pos[i*3+1]*=.96;pos[i*3+2]*=.96;}
+    }
+    pSys.geometry.attributes.position.needsUpdate=true;
+    pSys.rotation.y+=.0005*INT;
+  }
+
+  if(S.mode==='chaos'){
+    coreGroup.rotation.x+=Math.sin(time*7)*.002;
+    coreGroup.rotation.z+=Math.cos(time*5)*.002;
+    if(Math.random()>.97) coreMat.opacity=.3+Math.random()*.5;
+    else coreMat.opacity=.85;
+  }
+  if(S.mode==='data'){
+    dStreams.forEach(s=>{
+      s.line.position.y=((time*s.speed+s.offset)%5)-3;
+      s.line.material.opacity=Math.sin(time*s.speed*3+s.offset)*.2+.15;
+    });
+  }
+
+  cards.forEach((c,i)=>{
+    c.group.position.y=c.base[1]+Math.sin(time*.5+i*2)*.12;
+    c.group.rotation.y=c.baseR[1]+Math.sin(time*.3+i)*.04;
+  });
+
+  grid.material.opacity=.12+Math.sin(time*.5)*.06;
+  cLight.intensity=(2.5+Math.sin(time*2)*.5)*INT;
+  pLight.intensity=(2+Math.sin(time*1.7+1)*.5)*INT;
+
+  // slowly decay intensity
+  if(S.intensity>1) S.intensity=Math.max(1,S.intensity-.01);
+
+  document.getElementById('b-orbit').textContent=S.orbitSpeed.toFixed(1)+'×';
+  document.getElementById('b-int').textContent=S.intensity>1.5?'CRITICAL':S.intensity>1.2?'ELEVATED':'NOMINAL';
+  document.getElementById('sys-time').textContent=new Date().toTimeString().slice(0,8);
+
+  renderer.render(scene,camera);
+}
+
+// ── UI ──
+let gestureTO=null;
+function showGesture(name,sub){
+  document.getElementById('gf-name').textContent=name;
+  document.getElementById('gesture-sub').textContent=sub;
+  const el=document.getElementById('gesture-flash');
+  el.classList.add('show');
+  clearTimeout(gestureTO);
+  gestureTO=setTimeout(()=>el.classList.remove('show'),1200);
+}
+const aiLog=document.getElementById('ai-log');
+function log(msg){
+  const el=document.createElement('div'); el.className='ai-msg'; el.textContent=msg;
+  aiLog.appendChild(el);
+  setTimeout(()=>el.remove(),5500);
+  while(aiLog.children.length>4) aiLog.removeChild(aiLog.firstChild);
+}
+
+// AI heartbeat messages
+const pool=['◈ NEURAL PATTERN RECOGNIZED','◈ QUANTUM MATRIX STABILIZING','◈ PHOTON FLUX CALIBRATED','◈ ENERGY CORE OPTIMAL','◈ SCANNING BIOMETRIC SIGNATURE','◈ UPLINK ESTABLISHED'];
+let lastAI=0;
+setInterval(()=>{
+  if(Date.now()-lastAI>5000){
+    log(pool[Math.floor(Math.random()*pool.length)]);
+    lastAI=Date.now();
+  }
+},1000);
+
+// ── KEYBOARD fallback ──
+document.addEventListener('keydown', e=>{
+  const modes=['energy','wireframe','data','chaos'];
+  const i=modes.indexOf(S.mode);
+  if(e.key==='ArrowRight') applyMode(modes[(i+1)%4]);
+  if(e.key==='ArrowLeft') applyMode(modes[(i-1+4)%4]);
+  if(e.key==='ArrowUp') S.scale=Math.min(3,S.scale+.15);
+  if(e.key==='ArrowDown') S.scale=Math.max(.4,S.scale-.15);
+});
+
+// ── BOOT ──
+initPeer();
+requestAnimationFrame(loop);
+log('◈ DISPLAY SYSTEM ONLINE');
+setTimeout(()=>log('◈ AWAITING PHONE REMOTE...'),1500);
+</script>
+</body>
+</html>
