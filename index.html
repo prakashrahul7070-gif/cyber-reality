@@ -129,7 +129,7 @@ html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;font-famil
 <div id="scanlines"></div>
 <div id="vignette"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <!-- QR code generator -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
@@ -157,10 +157,26 @@ const S = {
 //  PEER CONNECTION (PeerJS free broker)
 // ═══════════════════════════════════════════
 let peer, conn;
-const roomId = 'cri-' + location.hash.slice(1) || 'cri-' + Math.random().toString(36).slice(2,7);
+const existingHash = location.hash.slice(1);
+const shortId = existingHash || Math.random().toString(36).slice(2,7);
+const roomId = 'cri-' + shortId;
 
-// update hash so remote.html can read it
-location.hash = roomId.replace('cri-','');
+// update hash so remote URL carries the room ID
+location.hash = shortId;
+
+// Show remote URL immediately on page load
+(function(){
+  const base = location.href.split('#')[0];
+  const dir = base.substring(0, base.lastIndexOf('/') + 1);
+  window._remoteUrl = dir + 'remote.html#' + shortId;
+  document.getElementById('qr-url').textContent = window._remoteUrl;
+  const t = setInterval(function(){
+    if(typeof QRCode !== 'undefined'){
+      clearInterval(t);
+      try{ new QRCode(document.getElementById('qr-img'),{text:window._remoteUrl,width:140,height:140,colorDark:'#00f5ff',colorLight:'#000408'}); }catch(e){}
+    }
+  }, 300);
+})();
 
 function initPeer() {
   // Load PeerJS
@@ -262,7 +278,10 @@ function handleSwipe(dir) {
 //  QR CODE
 // ═══════════════════════════════════════════
 function buildQR() {
-  const remoteUrl = location.href.replace('index.html','').replace(/\/?$/',') + 'remote.html#' + roomId.replace('cri-','');
+  // Build remote URL: same origin + path, swap filename to remote.html, add room hash
+  const base = location.href.split('#')[0];                          // strip any hash
+  const dir  = base.substring(0, base.lastIndexOf('/') + 1);        // directory part
+  const remoteUrl = dir + 'remote.html#' + shortId;
   document.getElementById('qr-url').textContent = remoteUrl;
   try {
     new QRCode(document.getElementById('qr-img'), {
